@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>DIGITRANS-CM – Test API CRM</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; }
+
+    header {
+      background: #1e293b;
+      padding: 20px 30px;
+      border-bottom: 2px solid #22d3ee;
+      display: flex; align-items: center; gap: 16px;
+    }
+    header h1 { font-size: 1.4rem; color: #22d3ee; }
+    header span { font-size: 0.85rem; color: #94a3b8; }
+
+    .badge {
+      display: inline-block; padding: 2px 10px; border-radius: 99px;
+      font-size: 0.75rem; font-weight: bold;
+    }
+    .badge-green  { background: #065f46; color: #6ee7b7; }
+    .badge-blue   { background: #1e3a5f; color: #93c5fd; }
+    .badge-orange { background: #7c2d12; color: #fdba74; }
+    .badge-red    { background: #7f1d1d; color: #fca5a5; }
+
+    .layout { display: flex; height: calc(100vh - 70px); }
+
+    /* Sidebar */
+    .sidebar {
+      width: 260px; background: #1e293b; padding: 16px;
+      border-right: 1px solid #334155; overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .sidebar h2 { font-size: 0.7rem; color: #64748b; text-transform: uppercase;
+                  letter-spacing: 1px; margin: 16px 0 8px; }
+    .route-btn {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 8px 10px; border: none; border-radius: 6px;
+      background: transparent; color: #cbd5e1; cursor: pointer;
+      font-size: 0.82rem; text-align: left; margin-bottom: 4px;
+      transition: background 0.15s;
+    }
+    .route-btn:hover { background: #334155; }
+    .route-btn.active { background: #0f4c81; color: #fff; }
+    .method { width: 48px; text-align: center; font-weight: bold;
+              font-size: 0.7rem; padding: 2px 4px; border-radius: 4px; }
+    .GET    { background: #065f46; color: #6ee7b7; }
+    .POST   { background: #1e3a5f; color: #93c5fd; }
+    .PATCH  { background: #4a1d96; color: #c4b5fd; }
+    .DELETE { background: #7f1d1d; color: #fca5a5; }
+
+    /* Main */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    .status-bar {
+      background: #1e293b; padding: 10px 20px;
+      border-bottom: 1px solid #334155;
+      display: flex; align-items: center; gap: 16px; font-size: 0.82rem;
+    }
+    #status-dot { width: 10px; height: 10px; border-radius: 50%;
+                  background: #6ee7b7; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .panel { display: flex; flex: 1; overflow: hidden; }
+
+    .request-panel {
+      width: 42%; border-right: 1px solid #334155;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .panel-header {
+      background: #1e293b; padding: 12px 16px;
+      border-bottom: 1px solid #334155; font-size: 0.8rem; color: #94a3b8;
+      font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .url-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px; background: #0f172a; border-bottom: 1px solid #334155;
+    }
+    #method-display {
+      background: #1e3a5f; color: #93c5fd; border: none; padding: 6px 10px;
+      border-radius: 6px; font-weight: bold; font-size: 0.85rem; color: #93c5fd;
+    }
+    #url-display {
+      flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+      padding: 6px 10px; color: #e2e8f0; font-size: 0.82rem; font-family: monospace;
+    }
+    #send-btn {
+      background: #0ea5e9; color: #fff; border: none; padding: 7px 16px;
+      border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem;
+    }
+    #send-btn:hover { background: #0284c7; }
+    #send-btn:active { transform: scale(0.97); }
+
+    textarea {
+      flex: 1; background: #0f172a; border: none; color: #a5f3fc;
+      font-family: 'Courier New', monospace; font-size: 0.82rem;
+      padding: 14px 16px; resize: none; outline: none;
+      border-bottom: 1px solid #334155;
+    }
+
+    .auth-bar {
+      padding: 10px 16px; background: #0f172a;
+      display: flex; align-items: center; gap: 8px; font-size: 0.8rem;
+    }
+    .auth-bar label { color: #64748b; white-space: nowrap; }
+    #token-input {
+      flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+      padding: 5px 8px; color: #e2e8f0; font-size: 0.78rem; font-family: monospace;
+    }
+
+    .response-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .resp-meta {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 16px; background: #1e293b; border-bottom: 1px solid #334155;
+      font-size: 0.8rem;
+    }
+    #resp-status { font-weight: bold; }
+    #resp-time   { color: #64748b; }
+    #resp-body {
+      flex: 1; background: #0f172a; color: #86efac;
+      font-family: 'Courier New', monospace; font-size: 0.82rem;
+      padding: 14px 16px; overflow-y: auto; white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .note { color: #f59e0b; font-size: 0.75rem; padding: 6px 16px;
+            background: #1c1a0e; border-top: 1px solid #334155; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>DIGITRANS-CM — CRM API</h1>
+    <span>Module SavoirManger · AGROCAM S.A. · v1.0.0</span>
+  </div>
+  <span class="badge badge-green" style="margin-left:auto">● LIVE</span>
+</header>
+
+<div class="layout">
+
+  <!-- Sidebar routes -->
+  <nav class="sidebar">
+    <h2>System</h2>
+    <button class="route-btn active" onclick="load('GET','/health','')">
+      <span class="method GET">GET</span>/health
+    </button>
+    <button class="route-btn" onclick="load('GET','/ready','')">
+      <span class="method GET">GET</span>/ready
+    </button>
+
+    <h2>Clients</h2>
+    <button class="route-btn" onclick="load('GET','/api/v1/clients/?page=1&per_page=10','')">
+      <span class="method GET">GET</span>Liste clients
+    </button>
+    <button class="route-btn" onclick="load('POST','/api/v1/clients/',JSON.stringify({nom:'MOUKAM',prenom:'Henri',telephone:'+237699000001',email:'h.moukam@agrocam.cm',ville:'Douala',quartier:'Bonanjo',consentement_marketing:true},null,2))">
+      <span class="method POST">POST</span>Créer client
+    </button>
+
+    <h2>Commandes</h2>
+    <button class="route-btn" onclick="load('GET','/api/v1/commandes/?restaurant_id=SM-DLA-01','')">
+      <span class="method GET">GET</span>Liste commandes
+    </button>
+    <button class="route-btn" onclick="load('POST','/api/v1/commandes/',JSON.stringify({restaurant_id:'SM-DLA-01',mode:'sur_place',lignes:[{article_id:'MENU-001',article_nom:'Poulet DG + Plantain',quantite:2,prix_unitaire:3500},{article_id:'BOISSON-001',article_nom:'Jus de Goyave',quantite:2,prix_unitaire:500}],mode_paiement:'mobile_money'},null,2))">
+      <span class="method POST">POST</span>Créer commande
+    </button>
+
+    <h2>Sync Offline</h2>
+    <button class="route-btn" onclick="load('GET','/api/v1/sync/queue/size','')">
+      <span class="method GET">GET</span>Taille file offline
+    </button>
+    <button class="route-btn" onclick="load('POST','/api/v1/sync/batch',JSON.stringify({device_id:'CAISSE-DLA-01',last_sync_at:new Date().toISOString(),operations:[{type:'create_commande',local_id:'offline-'+Date.now(),created_at_local:new Date().toISOString(),device_id:'CAISSE-DLA-01',restaurant_id:'SM-DLA-01',payload:{restaurant_id:'SM-DLA-01',mode:'a_emporter',lignes:[{article_id:'MENU-002',article_nom:'Brochettes Boeuf',quantite:1,prix_unitaire:2500}]}}]},null,2))">
+      <span class="method POST">POST</span>Sync batch offline
+    </button>
+  </nav>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="status-bar">
+      <span id="status-dot"></span>
+      <span id="api-status">Vérification...</span>
+      <span style="margin-left:auto;color:#64748b">Base : http://localhost:8000</span>
+    </div>
+
+    <div class="panel">
+      <!-- Request -->
+      <div class="request-panel">
+        <div class="panel-header">Requête</div>
+        <div class="url-bar">
+          <span id="method-display">GET</span>
+          <input id="url-display" value="/health" readonly>
+          <button id="send-btn" onclick="sendRequest()">▶ Envoyer</button>
+        </div>
+        <div class="auth-bar">
+          <label>🔑 Bearer Token :</label>
+          <input id="token-input" placeholder="(optionnel – laisser vide pour /health et /ready)" />
+        </div>
+        <textarea id="body-input" placeholder='Corps JSON (pour POST/PATCH)...'></textarea>
+        <div class="note">
+          ℹ Les routes /clients, /commandes, /fidelite nécessitent un token JWT.
+          /health et /ready sont publics.
+        </div>
+      </div>
+
+      <!-- Response -->
+      <div class="response-panel">
+        <div class="panel-header">Réponse</div>
+        <div class="resp-meta">
+          <span id="resp-status">—</span>
+          <span id="resp-time"></span>
+        </div>
+        <pre id="resp-body">Cliquez sur une route puis ▶ Envoyer</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE = 'http://localhost:8000';
+let currentMethod = 'GET';
+let currentUrl    = '/health';
+
+function load(method, url, body) {
+  currentMethod = method;
+  currentUrl    = url;
+  document.getElementById('method-display').textContent = method;
+  document.getElementById('method-display').className = '';
+  document.getElementById('url-display').value = url;
+  document.getElementById('body-input').value  = body;
+  document.querySelectorAll('.route-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+}
+
+async function sendRequest() {
+  const token = document.getElementById('token-input').value.trim();
+  const body  = document.getElementById('body-input').value.trim();
+  const url   = BASE + currentUrl;
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+
+  const opts = { method: currentMethod, headers };
+  if (body && ['POST','PUT','PATCH'].includes(currentMethod)) opts.body = body;
+
+  const t0 = performance.now();
+  try {
+    const r    = await fetch(url, opts);
+    const ms   = Math.round(performance.now() - t0);
+    const data = await r.json();
+
+    const statusEl = document.getElementById('resp-status');
+    statusEl.textContent = r.status + ' ' + r.statusText;
+    statusEl.style.color = r.ok ? '#6ee7b7' : '#fca5a5';
+
+    document.getElementById('resp-time').textContent = ms + ' ms';
+    document.getElementById('resp-body').textContent = JSON.stringify(data, null, 2);
+  } catch(e) {
+    document.getElementById('resp-status').textContent = 'Erreur réseau';
+    document.getElementById('resp-status').style.color = '#fca5a5';
+    document.getElementById('resp-body').textContent = e.message;
+  }
+}
+
+// Vérification santé au démarrage
+(async () => {
+  try {
+    const r = await fetch(BASE + '/health');
+    const d = await r.json();
+    document.getElementById('api-status').textContent =
+      `API ${d.status} · Redis ${d.redis} · v${d.version}`;
+    document.getElementById('status-dot').style.background = '#6ee7b7';
+  } catch {
+    document.getElementById('api-status').textContent = 'API inaccessible – vérifier docker compose up';
+    document.getElementById('status-dot').style.background = '#f87171';
+  }
+})();
+</script>
+</body>
+</html>
