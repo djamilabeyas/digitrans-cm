@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SavoirManger CRM – DIGITRANS-CM</title>
+  <style>
+    :root {
+      --bg: #0f172a; --surface: #1e293b; --border: #334155;
+      --primary: #0ea5e9; --primary-dark: #0284c7;
+      --accent: #22d3ee; --text: #e2e8f0; --muted: #94a3b8;
+      --success: #22c55e; --warning: #f59e0b; --danger: #ef4444;
+      --gold: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── NAV ── */
+    nav {
+      background: var(--surface); border-bottom: 2px solid var(--primary);
+      display: flex; align-items: center; padding: 0 24px; height: 60px;
+      position: sticky; top: 0; z-index: 100; gap: 24px;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { font-size: 1.6rem; }
+    .logo-text { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
+    .logo-sub  { font-size: 0.7rem; color: var(--muted); display: block; }
+    .nav-links { display: flex; gap: 4px; margin-left: 20px; }
+    .nav-btn {
+      padding: 6px 14px; border-radius: 6px; border: none;
+      background: transparent; color: var(--muted); cursor: pointer;
+      font-size: 0.85rem; transition: all 0.15s;
+    }
+    .nav-btn:hover  { background: var(--border); color: var(--text); }
+    .nav-btn.active { background: var(--primary); color: #fff; }
+    .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .badge-live { background: #064e3b; color: #6ee7b7; padding: 3px 10px;
+                  border-radius: 99px; font-size: 0.75rem; font-weight: 600; }
+    .restaurant-select {
+      background: var(--border); border: 1px solid #475569; color: var(--text);
+      padding: 5px 10px; border-radius: 6px; font-size: 0.82rem;
+    }
+
+    /* ── PAGES ── */
+    .page { display: none; padding: 24px; max-width: 1300px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* ── DASHBOARD ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+    .kpi-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; position: relative; overflow: hidden;
+    }
+    .kpi-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .kpi-card.blue::before   { background: var(--primary); }
+    .kpi-card.green::before  { background: var(--success); }
+    .kpi-card.orange::before { background: var(--warning); }
+    .kpi-card.purple::before { background: #a855f7; }
+    .kpi-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-value { font-size: 2rem; font-weight: 700; margin: 8px 0 4px; }
+    .kpi-sub   { font-size: 0.78rem; color: var(--muted); }
+    .kpi-icon  { position: absolute; top: 16px; right: 16px; font-size: 2rem; opacity: 0.15; }
+
+    .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+    }
+    .card-header {
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .card-title { font-size: 0.9rem; font-weight: 600; }
+    .card-body  { padding: 18px; }
+
+    /* ── TABLE ── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    th { color: var(--muted); font-weight: 600; text-align: left;
+         padding: 8px 12px; border-bottom: 1px solid var(--border);
+         font-size: 0.75rem; text-transform: uppercase; }
+    td { padding: 10px 12px; border-bottom: 1px solid #1e293b; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.03); }
+
+    /* ── STATUT BADGES ── */
+    .tag {
+      display: inline-block; padding: 2px 8px; border-radius: 99px;
+      font-size: 0.72rem; font-weight: 600;
+    }
+    .tag-green  { background: #064e3b; color: #6ee7b7; }
+    .tag-blue   { background: #1e3a5f; color: #93c5fd; }
+    .tag-orange { background: #7c2d12; color: #fdba74; }
+    .tag-purple { background: #4a1d96; color: #c4b5fd; }
+    .tag-red    { background: #7f1d1d; color: #fca5a5; }
+    .tag-gray   { background: #1e293b; color: #94a3b8; }
+
+    /* ── FORMS ── */
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .page-title { font-size: 1.3rem; font-weight: 700; }
+    .btn {
+      padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+      font-size: 0.85rem; font-weight: 600; transition: all 0.15s;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-danger  { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+    .btn-ghost { background: var(--border); color: var(--text); }
+    .btn-ghost:hover { background: #475569; }
+
+    /* ── MODAL ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 28px; width: 520px; max-width: 95vw;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal h2 { font-size: 1.1rem; margin-bottom: 20px; color: var(--accent); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 5px; }
+    input, select, textarea {
+      width: 100%; background: #0f172a; border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 12px; color: var(--text);
+      font-size: 0.85rem; outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+    .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+    /* ── COMMANDE BUILDER ── */
+    .ligne-row {
+      display: grid; grid-template-columns: 2fr 1fr 1fr auto;
+      gap: 8px; align-items: center; margin-bottom: 8px;
+    }
+    .total-box {
+      background: #0f172a; border-radius: 8px; padding: 12px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 12px;
+    }
+    .total-amount { font-size: 1.3rem; font-weight: 700; color: var(--accent); }
+
+    /* ── FIDELITE ── */
+    .fidelite-card {
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      border: 1px solid var(--border); border-radius: 16px; padding: 24px;
+      position: relative; overflow: hidden; margin-bottom: 20px;
+    }
+    .fidelite-card::after {
+      content: '★'; position: absolute; right: 20px; top: 50%;
+      transform: translateY(-50%); font-size: 5rem; opacity: 0.05;
+    }
+    .niveau-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 99px; font-weight: 700;
+      font-size: 0.85rem; margin-bottom: 12px;
+    }
+    .niveau-Bronze  { background: #78350f; color: #fcd34d; }
+    .niveau-Argent  { background: #374151; color: #e5e7eb; }
+    .niveau-Or      { background: #78350f; color: #fbbf24; }
+    .niveau-Platine { background: #1e3a5f; color: #bfdbfe; }
+    .points-display { font-size: 2.5rem; font-weight: 800; color: var(--gold); }
+
+    /* ── OFFLINE BANNER ── */
+    .offline-banner {
+      display: none; background: #7c2d12; border: 1px solid #f97316;
+      border-radius: 8px; padding: 10px 16px; margin-bottom: 16px;
+      font-size: 0.85rem; align-items: center; gap: 10px;
+    }
+    .offline-banner.show { display: flex; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 999;
+      background: #1e293b; border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 18px; font-size: 0.85rem;
+      display: none; align-items: center; gap: 10px; min-width: 260px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    #toast.show { display: flex; }
+    #toast.success { border-left: 4px solid var(--success); }
+    #toast.error   { border-left: 4px solid var(--danger); }
+    #toast.info    { border-left: 4px solid var(--primary); }
+
+    /* ── SEARCH ── */
+    .search-bar {
+      display: flex; gap: 10px; margin-bottom: 16px; align-items: center;
+    }
+    .search-bar input { max-width: 280px; }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">
+    <span class="logo-icon">🍽️</span>
+    <div>
+      <span class="logo-text">SavoirManger CRM</span>
+      <span class="logo-sub">DIGITRANS-CM · AGROCAM S.A.</span>
+    </div>
+  </div>
+  <div class="nav-links">
+    <button class="nav-btn active" onclick="showPage('dashboard')">📊 Tableau de bord</button>
+    <button class="nav-btn" onclick="showPage('clients')">👥 Clients</button>
+    <button class="nav-btn" onclick="showPage('commandes')">🧾 Commandes</button>
+    <button class="nav-btn" onclick="showPage('fidelite')">⭐ Fidélité</button>
+    <button class="nav-btn" onclick="showPage('sync')">🔄 Sync Offline</button>
+  </div>
+  <div class="nav-right">
+    <select class="restaurant-select" id="restaurant-sel">
+      <option value="SM-DLA-01">🏪 Douala – Bonanjo</option>
+      <option value="SM-DLA-02">🏪 Douala – Akwa</option>
+      <option value="SM-YDE-01">🏪 Yaoundé – Bastos</option>
+      <option value="SM-BFM-01">🏪 Bafoussam Centre</option>
+      <option value="SM-GAR-01">🏪 Garoua</option>
+    </select>
+    <span class="badge-live" id="api-badge">⏳ Connexion…</span>
+  </div>
+</nav>
+
+<!-- OFFLINE BANNER -->
+<div class="offline-banner" id="offline-banner">
+  ⚡ <strong>Mode hors ligne activé</strong> — Les opérations sont enregistrées localement et seront synchronisées au retour de la connexion.
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGE : DASHBOARD
+═══════════════════════════════════════════════ -->
+<div class="page active" id="page-dashboard">
+  <div style="padding:0 0 20px">
+    <div style="font-size:1.4rem;font-weight:700">Tableau de bord</div>
+    <div style="color:var(--muted);font-size:0.85rem" id="dash-date"></div>
+  </div>
+
+  <div class="kpi-grid" id="kpi-grid">
+    <div class="kpi-card blue">
+      <div class="kpi-icon">👥</div>
+      <div class="kpi-label">Clients actifs</div>
+      <div class="kpi-value" id="kpi-clients">—</div>
+      <div class="kpi-sub">Total enregistrés</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-icon">🧾</div>
+      <div class="kpi-label">Commandes aujourd'hui</div>
+      <div class="kpi-value" id="kpi-commandes">—</div>
+      <div class="kpi-sub" id="kpi-restaurant-name">Ce restaurant</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">Chiffre du jour</div>
+      <div class="kpi-value" id="kpi-ca">—</div>
+      <div class="kpi-sub">FCFA</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-icon">⭐</div>
+      <div class="kpi-label">File offline</div>
+      <div class="kpi-value" id="kpi-offline">0</div>
+      <div class="kpi-sub">Opérations en attente</div>
+    </div>
+  </div>
+
+  <div class="dash-grid">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Dernières commandes</span>
+        <button class="btn btn-sm btn-ghost" onclick="showPage('commandes')">Voir tout →</button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <table>
+          <thead><tr><th>N°</th><th>Mode</th><th>Montant</th><th>Statut</th></tr></thead>
+          <tbody id="dash-commandes"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Statuts des commandes</span>
+      </div>
+      <div class="card-body">
+        <div id="statut-chart" style="display:flex;flex-direction:column;gap:10px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGE : CLIENTS
+═══════════════════════════════════════════════ -->
+<div class="page" id="page-clients">
+  <div class="page-header">
+    <div class="page-title">👥 Clients</div>
+    <button class="btn btn-primary" onclick="openModal('modal-client')">+ Nouveau client</button>
+  </div>
+  <div class="search-bar">
+    <input type="text" id="client-search" placeholder="Rechercher par nom, téléphone…" oninput="filterClients()">
+    <select id="client-ville" onchange="filterClients()" style="max-width:160px">
+      <option value="">Toutes les villes</option>
+      <option>Douala</option><option>Yaoundé</option>
+      <option>Bafoussam</option><option>Garoua</option><option>Ngaoundéré</option>
+    </select>
+  </div>
+  <div class="card">
+    <div class="card-body" style="padding:0">
+      <table>
+        <thead>
+          <tr><th>N° Client</th><th>Nom complet</th><th>Téléphone</th><th>Ville</th><th>Fidélité</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="clients-table">
+          <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGE : COMMANDES
+═══════════════════════════════════════════════ -->
+<div class="page" id="page-commandes">
+  <div class="page-header">
+    <div class="page-title">🧾 Commandes</div>
+    <button class="btn btn-success" onclick="openModal('modal-commande')">+ Nouvelle commande</button>
+  </div>
+  <div class="search-bar">
+    <select id="cmd-statut" onchange="loadCommandes()" style="max-width:180px">
+      <option value="">Tous les statuts</option>
+      <option value="en_attente">En attente</option>
+      <option value="en_preparation">En préparation</option>
+      <option value="pret">Prêt</option>
+      <option value="livre">Livré</option>
+      <option value="annule">Annulé</option>
+    </select>
+  </div>
+  <div class="card">
+    <div class="card-body" style="padding:0">
+      <table>
+        <thead>
+          <tr><th>N° Commande</th><th>Date</th><th>Mode</th><th>Montant</th><th>Paiement</th><th>Statut</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="commandes-table">
+          <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px">Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGE : FIDÉLITÉ
+═══════════════════════════════════════════════ -->
+<div class="page" id="page-fidelite">
+  <div class="page-header">
+    <div class="page-title">⭐ Programme Fidélité</div>
+  </div>
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:20px">
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><span class="card-title">Rechercher un client</span></div>
+        <div class="card-body">
+          <input type="text" id="fidel-search" placeholder="Nom ou téléphone…" oninput="searchClientFidelite()">
+          <div id="fidel-results" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Niveaux</span></div>
+        <div class="card-body" style="font-size:0.82rem">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between"><span class="niveau-badge niveau-Bronze">🥉 Bronze</span><span style="color:var(--muted)">0 – 4 999 FCFA</span></div>
+            <div style="display:flex;justify-content:space-between"><span class="niveau-badge niveau-Argent">🥈 Argent</span><span style="color:var(--muted)">5 000 – 19 999 FCFA</span></div>
+            <div style="display:flex;justify-content:space-between"><span class="niveau-badge niveau-Or">🥇 Or</span><span style="color:var(--muted)">20 000 – 49 999 FCFA</span></div>
+            <div style="display:flex;justify-content:space-between"><span class="niveau-badge niveau-Platine">💎 Platine</span><span style="color:var(--muted)">50 000+ FCFA</span></div>
+          </div>
+          <div style="margin-top:12px;padding:10px;background:#0f172a;border-radius:8px;font-size:0.78rem;color:var(--muted)">
+            1 point par 1 000 FCFA dépensés
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="fidel-detail">
+      <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted)">
+        Sélectionnez un client pour voir sa carte fidélité
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGE : SYNC OFFLINE
+═══════════════════════════════════════════════ -->
+<div class="page" id="page-sync">
+  <div class="page-header">
+    <div class="page-title">🔄 Synchronisation Offline</div>
+    <button class="btn btn-primary" onclick="syncNow()">▶ Synchroniser maintenant</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+    <div class="kpi-card orange">
+      <div class="kpi-label">Opérations en attente</div>
+      <div class="kpi-value" id="sync-queue-size">—</div>
+      <div class="kpi-sub">Dans la file locale</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Dernier sync</div>
+      <div class="kpi-value" id="sync-last" style="font-size:1.1rem">—</div>
+      <div class="kpi-sub">Heure locale</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">File d'attente locale</span></div>
+    <div class="card-body" style="padding:0">
+      <table>
+        <thead><tr><th>Type</th><th>ID local</th><th>Restaurant</th><th>Créé le</th><th>Statut</th></tr></thead>
+        <tbody id="sync-table">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">Aucune opération en attente</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ MODALS ══════ -->
+
+<!-- Modal Client -->
+<div class="modal-overlay" id="modal-client">
+  <div class="modal">
+    <h2>➕ Nouveau Client</h2>
+    <div class="form-row">
+      <div class="form-group"><label>Nom *</label><input id="c-nom" placeholder="MOUKAM"></div>
+      <div class="form-group"><label>Prénom *</label><input id="c-prenom" placeholder="Henri-Claude"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Téléphone</label><input id="c-tel" placeholder="+237699000001"></div>
+      <div class="form-group"><label>Email</label><input id="c-email" type="email" placeholder="client@email.cm"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Ville</label>
+        <select id="c-ville">
+          <option>Douala</option><option>Yaoundé</option>
+          <option>Bafoussam</option><option>Garoua</option><option>Ngaoundéré</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Quartier</label><input id="c-quartier" placeholder="Bonanjo"></div>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="c-consent" style="width:auto"> Accord marketing
+      </label>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-client')">Annuler</button>
+      <button class="btn btn-primary" onclick="createClient()">Créer le client</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Commande -->
+<div class="modal-overlay" id="modal-commande">
+  <div class="modal" style="width:600px">
+    <h2>🧾 Nouvelle Commande</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Mode</label>
+        <select id="cmd-mode">
+          <option value="sur_place">Sur place</option>
+          <option value="a_emporter">À emporter</option>
+          <option value="livraison">Livraison</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Paiement</label>
+        <select id="cmd-paiement">
+          <option value="mobile_money">Mobile Money</option>
+          <option value="especes">Espèces</option>
+          <option value="carte">Carte</option>
+        </select>
+      </div>
+    </div>
+    <div style="font-size:0.82rem;font-weight:600;color:var(--muted);margin-bottom:10px;text-transform:uppercase">Articles</div>
+    <div id="lignes-container">
+      <div class="ligne-row">
+        <input placeholder="Article (ex: Poulet DG)" class="ligne-nom">
+        <input type="number" placeholder="Qté" class="ligne-qte" min="1" value="1">
+        <input type="number" placeholder="Prix (FCFA)" class="ligne-prix">
+        <button class="btn btn-sm btn-danger" onclick="removeLigne(this)">✕</button>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="addLigne()" style="margin-top:8px">+ Ajouter un article</button>
+    <div class="total-box">
+      <span style="color:var(--muted)">Total commande</span>
+      <span class="total-amount" id="cmd-total">0 XAF</span>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-commande')">Annuler</button>
+      <button class="btn btn-success" onclick="createCommande()">✓ Valider la commande</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast">
+  <span id="toast-icon">✓</span>
+  <span id="toast-msg"></span>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONFIG & STATE
+// ══════════════════════════════════════════════
+const API = 'http://localhost:8000';
+let offlineQueue = JSON.parse(localStorage.getItem('digitrans_offline') || '[]');
+let isOnline = true;
+
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name === 'dashboard')  loadDashboard();
+  if (name === 'clients')    loadClients();
+  if (name === 'commandes')  loadCommandes();
+  if (name === 'sync')       loadSync();
+}
+
+// ══════════════════════════════════════════════
+// API HELPER
+// ══════════════════════════════════════════════
+async function api(method, path, body) {
+  try {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(API + path, opts);
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch(e) {
+    return null;
+  }
+}
+
+// ══════════════════════════════════════════════
+// HEALTH CHECK
+// ══════════════════════════════════════════════
+async function checkHealth() {
+  const data = await api('GET', '/health');
+  const badge = document.getElementById('api-badge');
+  if (data && data.status === 'healthy') {
+    badge.textContent = '● API connectée';
+    badge.style.background = '#064e3b';
+    badge.style.color = '#6ee7b7';
+    isOnline = true;
+    document.getElementById('offline-banner').classList.remove('show');
+    if (offlineQueue.length > 0) autoSync();
+  } else {
+    badge.textContent = '⚡ Hors ligne';
+    badge.style.background = '#7c2d12';
+    badge.style.color = '#fdba74';
+    isOnline = false;
+    document.getElementById('offline-banner').classList.add('show');
+  }
+}
+
+// ══════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════
+async function loadDashboard() {
+  document.getElementById('dash-date').textContent =
+    new Date().toLocaleDateString('fr-FR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  const restaurant = document.getElementById('restaurant-sel').value;
+
+  const [clients, commandes, queueSize] = await Promise.all([
+    api('GET', '/api/v1/clients/?per_page=1'),
+    api('GET', `/api/v1/commandes/?restaurant_id=${restaurant}&per_page=50`),
+    api('GET', '/api/v1/sync/queue/size'),
+  ]);
+
+  if (clients) document.getElementById('kpi-clients').textContent = clients.total ?? '—';
+
+  if (commandes) {
+    document.getElementById('kpi-commandes').textContent = commandes.length;
+    const ca = commandes.reduce((s, c) => s + parseFloat(c.montant_total || 0), 0);
+    document.getElementById('kpi-ca').textContent = ca.toLocaleString('fr-FR');
+
+    // Table dernières commandes
+    const tbody = document.getElementById('dash-commandes');
+    tbody.innerHTML = commandes.slice(0, 8).map(c => `
+      <tr>
+        <td style="font-family:monospace;font-size:0.78rem">${c.numero_commande}</td>
+        <td>${modeTag(c.mode)}</td>
+        <td style="font-weight:600">${parseFloat(c.montant_total).toLocaleString('fr-FR')} XAF</td>
+        <td>${statutTag(c.statut)}</td>
+      </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">Aucune commande</td></tr>';
+
+    // Chart statuts
+    const counts = {};
+    commandes.forEach(c => { counts[c.statut] = (counts[c.statut] || 0) + 1; });
+    const total = commandes.length || 1;
+    const colors = { en_attente:'#f59e0b', en_preparation:'#3b82f6', pret:'#8b5cf6',
+                     en_livraison:'#06b6d4', livre:'#22c55e', annule:'#ef4444' };
+    document.getElementById('statut-chart').innerHTML = Object.entries(counts).map(([s, n]) => `
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px">
+          <span>${s.replace(/_/g,' ')}</span><span style="color:var(--muted)">${n}</span>
+        </div>
+        <div style="background:#0f172a;border-radius:99px;height:6px">
+          <div style="background:${colors[s]||'#64748b'};width:${Math.round(n/total*100)}%;height:6px;border-radius:99px"></div>
+        </div>
+      </div>`).join('') || '<div style="color:var(--muted);font-size:0.85rem">Aucune donnée</div>';
+  }
+
+  document.getElementById('kpi-offline').textContent = offlineQueue.length;
+  if (queueSize) document.getElementById('sync-queue-size') && (document.getElementById('kpi-offline').textContent = (offlineQueue.length + (queueSize.queue_size > 0 ? queueSize.queue_size : 0)));
+}
+
+// ══════════════════════════════════════════════
+// CLIENTS
+// ══════════════════════════════════════════════
+let allClients = [];
+
+async function loadClients() {
+  const search = document.getElementById('client-search').value;
+  const ville  = document.getElementById('client-ville').value;
+  let url = '/api/v1/clients/?per_page=100';
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  if (ville)  url += `&ville=${encodeURIComponent(ville)}`;
+  const data = await api('GET', url);
+  renderClients(data?.items || []);
+}
+
+function filterClients() { loadClients(); }
+
+function renderClients(list) {
+  const tbody = document.getElementById('clients-table');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">Aucun client trouvé</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(c => `
+    <tr>
+      <td><code style="font-size:0.78rem;color:var(--accent)">${c.numero_client}</code></td>
+      <td><strong>${c.nom} ${c.prenom}</strong></td>
+      <td>${c.telephone || '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${c.ville}${c.quartier ? ', '+c.quartier : ''}</td>
+      <td>${c.consentement_marketing ? '✅' : '—'}</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-ghost" onclick="viewFidelite('${c.id}','${c.nom} ${c.prenom}')">⭐</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteClient('${c.id}','${c.nom}')">🗑</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function createClient() {
+  const body = {
+    nom:                    document.getElementById('c-nom').value,
+    prenom:                 document.getElementById('c-prenom').value,
+    telephone:              document.getElementById('c-tel').value || undefined,
+    email:                  document.getElementById('c-email').value || undefined,
+    ville:                  document.getElementById('c-ville').value,
+    quartier:               document.getElementById('c-quartier').value || undefined,
+    consentement_marketing: document.getElementById('c-consent').checked,
+  };
+  if (!body.nom || !body.prenom) { toast('Nom et prénom requis', 'error'); return; }
+
+  if (!isOnline) {
+    offlineQueue.push({ type:'create_client', local_id:'cli-'+Date.now(), payload: body,
+                        created_at_local: new Date().toISOString(), device_id: 'WEB', restaurant_id: restaurant() });
+    saveQueue();
+    toast('Client enregistré hors ligne ✓', 'info');
+    closeModal('modal-client');
+    return;
+  }
+
+  const r = await api('POST', '/api/v1/clients/', body);
+  if (r?.id) {
+    toast(`Client ${r.numero_client} créé ✓`, 'success');
+    closeModal('modal-client');
+    loadClients();
+  } else {
+    toast('Erreur lors de la création', 'error');
+  }
+}
+
+async function deleteClient(id, nom) {
+  if (!confirm(`Désactiver le client "${nom}" ?`)) return;
+  await api('DELETE', `/api/v1/clients/${id}`);
+  toast(`Client désactivé`, 'success');
+  loadClients();
+}
+
+// ══════════════════════════════════════════════
+// COMMANDES
+// ══════════════════════════════════════════════
+async function loadCommandes() {
+  const statut = document.getElementById('cmd-statut').value;
+  let url = `/api/v1/commandes/?restaurant_id=${restaurant()}&per_page=50`;
+  if (statut) url += `&statut=${statut}`;
+  const data = await api('GET', url);
+  const tbody = document.getElementById('commandes-table');
+  if (!data?.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px">Aucune commande</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(c => `
+    <tr>
+      <td><code style="font-size:0.78rem;color:var(--accent)">${c.numero_commande}</code></td>
+      <td style="font-size:0.78rem;color:var(--muted)">${new Date(c.created_at).toLocaleString('fr-FR')}</td>
+      <td>${modeTag(c.mode)}</td>
+      <td><strong>${parseFloat(c.montant_total).toLocaleString('fr-FR')} XAF</strong></td>
+      <td>${c.devise}</td>
+      <td>${statutTag(c.statut)}</td>
+      <td>
+        ${c.statut === 'en_attente' ? `<button class="btn btn-sm btn-primary" onclick="updateStatut('${c.id}','en_preparation')">▶ Préparer</button>` : ''}
+        ${c.statut === 'en_preparation' ? `<button class="btn btn-sm btn-success" onclick="updateStatut('${c.id}','pret')">✓ Prêt</button>` : ''}
+        ${c.statut === 'pret' ? `<button class="btn btn-sm btn-success" onclick="updateStatut('${c.id}','livre')">📦 Livré</button>` : ''}
+      </td>
+    </tr>`).join('');
+}
+
+async function updateStatut(id, statut) {
+  const r = await api('PATCH', `/api/v1/commandes/${id}/statut`, { statut });
+  if (r) { toast(`Statut mis à jour : ${statut.replace(/_/g,' ')}`, 'success'); loadCommandes(); }
+}
+
+function addLigne() {
+  const div = document.createElement('div');
+  div.className = 'ligne-row';
+  div.innerHTML = `
+    <input placeholder="Article" class="ligne-nom">
+    <input type="number" placeholder="Qté" class="ligne-qte" min="1" value="1">
+    <input type="number" placeholder="Prix (FCFA)" class="ligne-prix">
+    <button class="btn btn-sm btn-danger" onclick="removeLigne(this)">✕</button>`;
+  document.getElementById('lignes-container').appendChild(div);
+  div.querySelectorAll('input').forEach(i => i.addEventListener('input', calcTotal));
+}
+
+function removeLigne(btn) {
+  const rows = document.querySelectorAll('.ligne-row');
+  if (rows.length > 1) btn.closest('.ligne-row').remove();
+  calcTotal();
+}
+
+function calcTotal() {
+  let total = 0;
+  document.querySelectorAll('.ligne-row').forEach(row => {
+    const q = parseFloat(row.querySelector('.ligne-qte')?.value) || 0;
+    const p = parseFloat(row.querySelector('.ligne-prix')?.value) || 0;
+    total += q * p;
+  });
+  document.getElementById('cmd-total').textContent = total.toLocaleString('fr-FR') + ' XAF';
+}
+
+document.addEventListener('input', e => { if (e.target.classList.contains('ligne-prix') || e.target.classList.contains('ligne-qte')) calcTotal(); });
+
+async function createCommande() {
+  const lignes = [];
+  let idx = 0;
+  document.querySelectorAll('.ligne-row').forEach(row => {
+    const nom  = row.querySelector('.ligne-nom').value;
+    const qte  = parseInt(row.querySelector('.ligne-qte').value);
+    const prix = parseFloat(row.querySelector('.ligne-prix').value);
+    if (nom && qte > 0 && prix > 0) {
+      lignes.push({ article_id: 'ART-' + (++idx).toString().padStart(3,'0'),
+                    article_nom: nom, quantite: qte, prix_unitaire: prix });
+    }
+  });
+  if (!lignes.length) { toast('Ajoutez au moins un article', 'error'); return; }
+
+  const body = {
+    restaurant_id: restaurant(),
+    mode:          document.getElementById('cmd-mode').value,
+    mode_paiement: document.getElementById('cmd-paiement').value,
+    lignes,
+  };
+
+  if (!isOnline) {
+    const syncId = 'cmd-' + Date.now();
+    offlineQueue.push({ type:'create_commande', local_id: syncId, payload: body,
+                        created_at_local: new Date().toISOString(), device_id:'WEB', restaurant_id: restaurant() });
+    saveQueue();
+    toast('Commande enregistrée hors ligne ✓', 'info');
+    closeModal('modal-commande');
+    return;
+  }
+
+  const r = await api('POST', '/api/v1/commandes/', body);
+  if (r?.id) {
+    toast(`Commande ${r.numero_commande} créée ✓`, 'success');
+    closeModal('modal-commande');
+    loadCommandes();
+  } else {
+    toast('Erreur lors de la création', 'error');
+  }
+}
+
+// ══════════════════════════════════════════════
+// FIDÉLITÉ
+// ══════════════════════════════════════════════
+async function searchClientFidelite() {
+  const q = document.getElementById('fidel-search').value;
+  if (q.length < 2) { document.getElementById('fidel-results').innerHTML = ''; return; }
+  const data = await api('GET', `/api/v1/clients/?search=${encodeURIComponent(q)}&per_page=5`);
+  const div = document.getElementById('fidel-results');
+  if (!data?.items?.length) { div.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">Aucun résultat</div>'; return; }
+  div.innerHTML = data.items.map(c => `
+    <div onclick="viewFidelite('${c.id}','${c.nom} ${c.prenom}')"
+         style="padding:8px 10px;border-radius:8px;cursor:pointer;background:#0f172a;margin-bottom:4px;font-size:0.83rem">
+      <strong>${c.nom} ${c.prenom}</strong>
+      <div style="color:var(--muted);font-size:0.75rem">${c.telephone || c.email || ''}</div>
+    </div>`).join('');
+}
+
+async function viewFidelite(clientId, nom) {
+  showPage_direct('fidelite');
+  const data = await api('GET', `/api/v1/fidelite/${clientId}`);
+  const hist = await api('GET', `/api/v1/fidelite/${clientId}/historique`);
+  const div  = document.getElementById('fidel-detail');
+
+  if (!data) { div.innerHTML = '<div style="color:var(--muted)">Carte fidélité non trouvée</div>'; return; }
+
+  const pct = Math.min(100, (data.total_depenses / (
+    data.niveau === 'Bronze'  ? 5000  :
+    data.niveau === 'Argent'  ? 20000 :
+    data.niveau === 'Or'      ? 50000 : 100000
+  )) * 100);
+
+  div.innerHTML = `
+    <div class="fidelite-card">
+      <span class="niveau-badge niveau-${data.niveau}">${niveauIcon(data.niveau)} ${data.niveau}</span>
+      <div style="font-size:0.85rem;color:var(--muted);margin-bottom:8px">${nom}</div>
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span class="points-display">${data.points}</span>
+        <span style="color:var(--muted)">points</span>
+      </div>
+      <div style="margin-top:12px">
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:4px">
+          <span style="color:var(--muted)">Total dépensé</span>
+          <span>${parseFloat(data.total_depenses).toLocaleString('fr-FR')} FCFA</span>
+        </div>
+        <div style="background:#0f172a;border-radius:99px;height:8px">
+          <div style="background:var(--gold);width:${pct}%;height:8px;border-radius:99px;transition:width 0.5s"></div>
+        </div>
+      </div>
+      ${data.derniere_visite ? `<div style="font-size:0.78rem;color:var(--muted);margin-top:10px">Dernière visite : ${new Date(data.derniere_visite).toLocaleDateString('fr-FR')}</div>` : ''}
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Historique des points</span></div>
+      <div class="card-body" style="padding:0">
+        <table>
+          <thead><tr><th>Date</th><th>Motif</th><th>Points</th></tr></thead>
+          <tbody>${(hist||[]).map(t => `
+            <tr>
+              <td style="font-size:0.78rem;color:var(--muted)">${new Date(t.created_at).toLocaleDateString('fr-FR')}</td>
+              <td>${t.motif}</td>
+              <td style="font-weight:700;color:${t.points_delta>0?'var(--success)':'var(--danger)'}">${t.points_delta>0?'+':''}${t.points_delta}</td>
+            </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px">Aucun historique</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function showPage_direct(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-btn')[name === 'fidelite' ? 3 : 0].classList.add('active');
+}
+
+// ══════════════════════════════════════════════
+// SYNC OFFLINE
+// ══════════════════════════════════════════════
+function saveQueue() {
+  localStorage.setItem('digitrans_offline', JSON.stringify(offlineQueue));
+  document.getElementById('kpi-offline').textContent = offlineQueue.length;
+}
+
+function loadSync() {
+  const tbody = document.getElementById('sync-table');
+  if (!offlineQueue.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px">✅ Aucune opération en attente</td></tr>';
+    document.getElementById('sync-queue-size').textContent = '0';
+    return;
+  }
+  document.getElementById('sync-queue-size').textContent = offlineQueue.length;
+  tbody.innerHTML = offlineQueue.map(op => `
+    <tr>
+      <td>${op.type.replace(/_/g,' ')}</td>
+      <td><code style="font-size:0.75rem">${op.local_id}</code></td>
+      <td>${op.restaurant_id}</td>
+      <td style="font-size:0.78rem;color:var(--muted)">${new Date(op.created_at_local).toLocaleString('fr-FR')}</td>
+      <td><span class="tag tag-orange">En attente</span></td>
+    </tr>`).join('');
+}
+
+async function syncNow() {
+  if (!offlineQueue.length) { toast('Aucune opération à synchroniser', 'info'); return; }
+  if (!isOnline) { toast('Pas de connexion Internet', 'error'); return; }
+
+  const body = {
+    device_id:    'WEB-' + location.hostname,
+    last_sync_at: new Date().toISOString(),
+    operations:   offlineQueue,
+  };
+  const r = await api('POST', '/api/v1/sync/batch', body);
+  if (r) {
+    toast(`Sync OK : ${r.accepted} acceptées, ${r.rejected} rejetées`, r.rejected > 0 ? 'info' : 'success');
+    offlineQueue = [];
+    saveQueue();
+    document.getElementById('sync-last').textContent = new Date().toLocaleTimeString('fr-FR');
+    loadSync();
+  } else {
+    toast('Erreur de synchronisation', 'error');
+  }
+}
+
+async function autoSync() {
+  await syncNow();
+}
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+function restaurant() { return document.getElementById('restaurant-sel').value; }
+
+function statutTag(s) {
+  const map = {
+    en_attente:     ['orange','⏳ En attente'],
+    en_preparation: ['blue',  '👨‍🍳 En préparation'],
+    pret:           ['purple','✅ Prêt'],
+    en_livraison:   ['blue',  '🛵 Livraison'],
+    livre:          ['green', '✓ Livré'],
+    annule:         ['red',   '✕ Annulé'],
+    rembourse:      ['red',   '↩ Remboursé'],
+  };
+  const [cls, label] = map[s] || ['gray', s];
+  return `<span class="tag tag-${cls}">${label}</span>`;
+}
+
+function modeTag(m) {
+  const map = { sur_place:'🪑 Sur place', a_emporter:'🥡 À emporter', livraison:'🛵 Livraison' };
+  return `<span style="font-size:0.82rem">${map[m] || m}</span>`;
+}
+
+function niveauIcon(n) {
+  return { Bronze:'🥉', Argent:'🥈', Or:'🥇', Platine:'💎' }[n] || '⭐';
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+function toast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  document.getElementById('toast-icon').textContent = type === 'error' ? '✕' : type === 'info' ? 'ℹ' : '✓';
+  t.className = 'show ' + type;
+  setTimeout(() => t.className = '', 3500);
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+document.getElementById('dash-date') && (document.getElementById('dash-date').textContent =
+  new Date().toLocaleDateString('fr-FR', { weekday:'long', year:'numeric', month:'long', day:'numeric' }));
+
+checkHealth();
+loadDashboard();
+setInterval(checkHealth, 15000);
+
+document.getElementById('restaurant-sel').addEventListener('change', () => {
+  if (document.getElementById('page-dashboard').classList.contains('active')) loadDashboard();
+  if (document.getElementById('page-commandes').classList.contains('active')) loadCommandes();
+});
+</script>
+</body>
+</html>
