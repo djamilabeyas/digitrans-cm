@@ -422,7 +422,7 @@
 <div class="page" id="page-commandes">
   <div class="page-header">
     <div class="page-title">🧾 Commandes</div>
-    <button class="btn btn-success" onclick="openModal('modal-commande')">+ Nouvelle commande</button>
+    <button class="btn btn-success" onclick="openModalCommande()">+ Nouvelle commande</button>
   </div>
   <div class="search-bar">
     <select id="cmd-statut" onchange="loadCommandes()" style="max-width:180px">
@@ -560,6 +560,29 @@
 <div class="modal-overlay" id="modal-commande">
   <div class="modal" style="width:600px">
     <h2>🧾 Nouvelle Commande</h2>
+
+    <!-- Recherche client (optionnel – pour créditer les points fidélité) -->
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Client <span style="color:var(--muted);font-weight:normal">(optionnel – pour les points fidélité)</span></label>
+      <div style="position:relative">
+        <input id="cmd-client-search" placeholder="Rechercher par nom ou téléphone…"
+               oninput="searchClientCommande()"
+               autocomplete="off"
+               style="width:100%;padding-right:32px">
+        <button onclick="clearClientCommande()" id="cmd-client-clear"
+                style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);
+                       background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem">✕</button>
+      </div>
+      <div id="cmd-client-results" style="background:#0f172a;border:1px solid var(--border);
+           border-radius:8px;margin-top:4px;display:none;max-height:160px;overflow-y:auto"></div>
+      <div id="cmd-client-selected" style="display:none;margin-top:6px;padding:8px 12px;
+           background:#064e3b;border-radius:8px;font-size:0.82rem;color:#6ee7b7;
+           display:none;align-items:center;justify-content:space-between">
+        <span id="cmd-client-name"></span>
+        <span style="font-size:0.75rem;opacity:0.8">⭐ Points fidélité activés</span>
+      </div>
+    </div>
+
     <div class="form-row">
       <div class="form-group">
         <label>Mode</label>
@@ -612,6 +635,7 @@
 const API = 'http://localhost:8000';
 let offlineQueue = JSON.parse(localStorage.getItem('digitrans_offline') || '[]');
 let isOnline = true;
+let selectedClientId = null;   // client associé à la commande en cours
 
 // ══════════════════════════════════════════════
 // NAVIGATION
@@ -999,6 +1023,7 @@ async function createCommande() {
     mode:          document.getElementById('cmd-mode').value,
     mode_paiement: document.getElementById('cmd-paiement').value,
     lignes,
+    ...(selectedClientId ? { client_id: selectedClientId } : {}),
   };
 
   if (!isOnline) {
@@ -1022,6 +1047,58 @@ async function createCommande() {
 }
 
 // ══════════════════════════════════════════════
+// ══════════════════════════════════════════════
+// RECHERCHE CLIENT DANS MODAL COMMANDE
+// ══════════════════════════════════════════════
+async function searchClientCommande() {
+  const q = document.getElementById('cmd-client-search').value.trim();
+  const resultsEl = document.getElementById('cmd-client-results');
+
+  if (q.length < 2) { resultsEl.style.display = 'none'; return; }
+
+  const data = await api('GET', `/api/v1/clients/?search=${encodeURIComponent(q)}&per_page=5`);
+  if (!data?.items?.length) {
+    resultsEl.style.display = 'block';
+    resultsEl.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:0.82rem">Aucun client trouvé</div>';
+    return;
+  }
+
+  resultsEl.style.display = 'block';
+  resultsEl.innerHTML = data.items.map(c => `
+    <div onclick="selectClientCommande('${c.id}','${c.nom} ${c.prenom}','${c.telephone||''}')"
+         style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:0.83rem"
+         onmouseover="this.style.background='#1e293b'" onmouseout="this.style.background=''">
+      <strong>${c.nom} ${c.prenom}</strong>
+      <span style="color:var(--muted);margin-left:8px">${c.telephone || c.email || ''}</span>
+      <span style="float:right;color:var(--accent);font-size:0.75rem">${c.numero_client}</span>
+    </div>`).join('');
+}
+
+function selectClientCommande(id, nom, tel) {
+  selectedClientId = id;
+  document.getElementById('cmd-client-search').value = nom;
+  document.getElementById('cmd-client-results').style.display = 'none';
+  document.getElementById('cmd-client-clear').style.display = 'block';
+
+  const sel = document.getElementById('cmd-client-selected');
+  document.getElementById('cmd-client-name').textContent = `${nom}${tel ? ' · ' + tel : ''}`;
+  sel.style.display = 'flex';
+}
+
+function clearClientCommande() {
+  selectedClientId = null;
+  document.getElementById('cmd-client-search').value = '';
+  document.getElementById('cmd-client-results').style.display = 'none';
+  document.getElementById('cmd-client-clear').style.display = 'none';
+  document.getElementById('cmd-client-selected').style.display = 'none';
+}
+
+// Reset du client quand on ferme le modal
+function openModalCommande() {
+  clearClientCommande();
+  openModal('modal-commande');
+}
+
 // FIDÉLITÉ
 // ══════════════════════════════════════════════
 async function searchClientFidelite() {
