@@ -13,7 +13,8 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.logging import configure_logging, get_logger
 from app.core.redis_client import redis_client
-from app.routers import clients, commandes, fidelite, sync
+from app.routers import clients, commandes, fidelite, sync, auth
+import app.models.utilisateur  # noqa: F401 – enregistre le modèle pour create_all
 from app.middleware.security import SecurityHeadersMiddleware, RateLimitMiddleware
 from app.middleware.audit import AuditMiddleware
 
@@ -27,6 +28,12 @@ async def lifespan(app: FastAPI):
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Créer les comptes de démonstration si la base est vide
+    from app.core.seed import seed_users
+    from app.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        await seed_users(db)
 
     await redis_client.connect()
     logger.info("Redis connecté – cache offline-first activé")
@@ -82,6 +89,7 @@ app.add_middleware(
 # ------------------------------------------------------------------
 # Routeurs
 # ------------------------------------------------------------------
+app.include_router(auth.router,      prefix="/auth",             tags=["Authentification"])
 app.include_router(clients.router,   prefix="/api/v1/clients",   tags=["Clients"])
 app.include_router(commandes.router, prefix="/api/v1/commandes", tags=["Commandes"])
 app.include_router(fidelite.router,  prefix="/api/v1/fidelite",  tags=["Fidélité"])

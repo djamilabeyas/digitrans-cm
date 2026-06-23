@@ -31,7 +31,12 @@ class Settings(BaseSettings):
     REDIS_OFFLINE_QUEUE_TTL: int = 86400  # 24h – durée max file offline
 
     # Sécurité
-    CORS_ORIGINS: List[str] = ["https://savoirmanger.agrocam.cm"]
+    CORS_ORIGINS: List[str] = [
+        "https://savoirmanger.agrocam.cm",
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "null",           # fichiers ouverts depuis le disque (file://)
+    ]
     ALLOWED_HOSTS: List[str] = ["*.agrocam.cm", "localhost"]
     RATE_LIMIT_PER_MINUTE: int = 100
     MAX_REQUEST_SIZE_MB: int = 10

@@ -27,7 +27,7 @@ services:
       REDIS_SSL: "false"
       SECRET_KEY: dev-secret-key-not-for-prod
       ALGORITHM: HS256
-      CORS_ORIGINS: '["http://localhost:3000","http://localhost:8080"]'
+      CORS_ORIGINS: '["http://localhost:3000","http://localhost:8080","http://127.0.0.1:8080"]'
       ALLOWED_HOSTS: '["localhost","127.0.0.1"]'
       RATE_LIMIT_PER_MINUTE: 1000
       LOG_LEVEL: DEBUG
@@ -90,6 +90,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Frontend – interface web SavoirManger
+  # ------------------------------------------------------------------
+  frontend:
+    image: python:3.12-slim
+    container_name: digitrans-frontend
+    command: python -m http.server 8080 --directory /app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./frontend:/app:ro
+    networks:
+      - digitrans-net
     restart: unless-stopped
 
   # ------------------------------------------------------------------

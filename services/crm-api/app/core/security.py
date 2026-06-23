@@ -65,17 +65,18 @@ def create_refresh_token(subject: str) -> str:
         "iat": now,
         "exp": now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         "jti": secrets.token_urlsafe(32),
+        "aud": "digitrans-cm-refresh",
     }
     return jwt.encode(claims, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def decode_token(token: str) -> dict:
+def decode_token(token: str, audience: str = "digitrans-cm-crm") -> dict:
     try:
         return jwt.decode(
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
-            audience="digitrans-cm-crm",
+            audience=audience,
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -92,12 +93,24 @@ def decode_token(token: str) -> dict:
         )
 
 
+class _DevUser:
+    """Utilisateur fictif pour l'environnement de développement."""
+    def __init__(self, payload: dict):
+        self.id = payload.get("sub", "dev-admin")
+        self.is_active = True
+        self._jwt_payload = payload
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ):
     payload = decode_token(credentials.credentials)
     user_id = payload.get("sub")
+
+    # En dev, on évite la requête DB et on retourne un utilisateur virtuel
+    if settings.ENVIRONMENT != "prod":
+        return _DevUser(payload)
 
     from app.services.user_service import get_user_by_id
     user = await get_user_by_id(db, user_id)
@@ -108,7 +121,6 @@ async def get_current_user(
             detail="Utilisateur inactif ou introuvable",
         )
 
-    # Attacher le payload JWT à l'objet user pour l'audit middleware
     user._jwt_payload = payload
     return user
 

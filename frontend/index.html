@@ -180,6 +180,57 @@
     }
     .offline-banner.show { display: flex; }
 
+    /* ── LOGIN SCREEN ── */
+    #login-screen {
+      position: fixed; inset: 0; z-index: 9999;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #login-screen.hidden { display: none; }
+    .login-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 40px; width: 380px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .login-logo { text-align: center; margin-bottom: 28px; }
+    .login-logo .logo-icon { font-size: 2.5rem; }
+    .login-logo h1 { font-size: 1.3rem; color: var(--accent); margin-top: 8px; }
+    .login-logo p  { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+    .login-field { margin-bottom: 16px; }
+    .login-field label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; }
+    .login-field input {
+      width: 100%; padding: 10px 12px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-size: 0.9rem;
+    }
+    .login-field input:focus { outline: none; border-color: var(--primary); }
+    .login-btn {
+      width: 100%; padding: 12px; background: var(--primary); color: #fff;
+      border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600;
+      cursor: pointer; margin-top: 8px; transition: background 0.15s;
+    }
+    .login-btn:hover { background: var(--primary-dark); }
+    .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .login-error {
+      background: #7f1d1d; border: 1px solid #ef4444; border-radius: 8px;
+      padding: 10px 12px; font-size: 0.82rem; color: #fca5a5;
+      margin-bottom: 16px; display: none;
+    }
+    .login-error.show { display: block; }
+    .login-hint {
+      margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);
+      font-size: 0.75rem; color: var(--muted);
+    }
+    .login-hint table { width: 100%; border-collapse: collapse; }
+    .login-hint td { padding: 3px 6px; }
+    .login-hint .role { color: var(--accent); font-weight: 600; }
+    .user-chip {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--border); padding: 4px 10px; border-radius: 99px;
+      font-size: 0.8rem; cursor: pointer;
+    }
+    .user-chip:hover { background: #475569; }
+
     /* ── TOAST ── */
     #toast {
       position: fixed; bottom: 24px; right: 24px; z-index: 999;
@@ -201,6 +252,41 @@
   </style>
 </head>
 <body>
+
+<!-- ══════════════════════════════════════════════
+     ÉCRAN DE CONNEXION
+═══════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">🍽️</div>
+      <h1>SavoirManger CRM</h1>
+      <p>DIGITRANS-CM · AGROCAM S.A.</p>
+    </div>
+
+    <div class="login-error" id="login-error"></div>
+
+    <div class="login-field">
+      <label>Adresse email</label>
+      <input type="email" id="login-email" placeholder="votre@email.cm" autocomplete="email">
+    </div>
+    <div class="login-field">
+      <label>Mot de passe</label>
+      <input type="password" id="login-pwd" placeholder="••••••••" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter') doLogin()">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Se connecter</button>
+
+    <div class="login-hint">
+      <strong>Comptes de démonstration :</strong>
+      <table>
+        <tr><td class="role">Admin</td><td>admin@agrocam.cm</td><td>Admin@2024!</td></tr>
+        <tr><td class="role">Manager</td><td>manager.dla@agrocam.cm</td><td>Manager@2024!</td></tr>
+        <tr><td class="role">Caissier</td><td>caissier.dla@agrocam.cm</td><td>Caissier@2024!</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
 
 <!-- NAV -->
 <nav>
@@ -227,6 +313,11 @@
       <option value="SM-GAR-01">🏪 Garoua</option>
     </select>
     <span class="badge-live" id="api-badge">⏳ Connexion…</span>
+    <div class="user-chip" id="user-chip" style="display:none" onclick="doLogout()" title="Cliquer pour se déconnecter">
+      <span id="user-chip-icon">👤</span>
+      <span id="user-chip-name"></span>
+      <span style="color:var(--muted)">✕</span>
+    </div>
   </div>
 </nav>
 
@@ -539,11 +630,41 @@ function showPage(name) {
 // ══════════════════════════════════════════════
 // API HELPER
 // ══════════════════════════════════════════════
-async function api(method, path, body) {
+// Requête sans auth (health, login)
+async function apiFetch(method, path, body) {
   try {
-    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include' };
     if (body) opts.body = JSON.stringify(body);
     const r = await fetch(API + path, opts);
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+// Requête avec auth + refresh automatique si 401
+async function api(method, path, body) {
+  const doRequest = async () => {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+    const opts = { method, headers, credentials: 'include' };
+    if (body) opts.body = JSON.stringify(body);
+    return fetch(API + path, opts);
+  };
+
+  try {
+    let r = await doRequest();
+
+    // Token expiré → on tente un refresh silencieux puis on réessaie
+    if (r.status === 401) {
+      const refreshed = await refreshTokenSilently();
+      if (refreshed) {
+        r = await doRequest();
+      } else {
+        showLoginScreen();
+        return null;
+      }
+    }
+
     if (!r.ok) throw new Error(r.status);
     return await r.json();
   } catch(e) {
@@ -552,10 +673,104 @@ async function api(method, path, body) {
 }
 
 // ══════════════════════════════════════════════
+// AUTH – Login / Logout / Refresh token
+// ══════════════════════════════════════════════
+let authToken = '';
+let currentUser = null;
+
+function showLoginScreen() {
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('user-chip').style.display = 'none';
+  authToken = '';
+  currentUser = null;
+}
+
+function hideLoginScreen(user) {
+  document.getElementById('login-screen').classList.add('hidden');
+  currentUser = user;
+  const chip = document.getElementById('user-chip');
+  chip.style.display = 'flex';
+  const icons = { admin: '🛡️', manager: '📋', caissier: '💳', livreur: '🛵', client_app: '👤' };
+  document.getElementById('user-chip-icon').textContent = icons[user.role] || '👤';
+  document.getElementById('user-chip-name').textContent = `${user.prenom} (${user.role})`;
+}
+
+async function doLogin() {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-pwd').value;
+  const errEl    = document.getElementById('login-error');
+  const btn      = document.getElementById('login-btn');
+
+  if (!email || !password) {
+    errEl.textContent = 'Veuillez remplir tous les champs.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Connexion…';
+  errEl.classList.remove('show');
+
+  try {
+    const r = await fetch(API + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',   // inclut le cookie refresh token
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      errEl.textContent = data.detail || 'Identifiants incorrects.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    authToken = data.access_token;
+    hideLoginScreen(data);
+    toast(`Bienvenue, ${data.prenom} !`, 'success');
+    checkHealth();
+    loadDashboard();
+
+  } catch(e) {
+    errEl.textContent = 'Impossible de joindre le serveur. Vérifiez que Docker tourne.';
+    errEl.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Se connecter';
+  }
+}
+
+async function doLogout() {
+  try {
+    await fetch(API + '/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch(e) { /* silencieux */ }
+  showLoginScreen();
+  toast('Déconnecté.', 'info');
+}
+
+async function refreshTokenSilently() {
+  try {
+    const r = await fetch(API + '/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (r.ok) {
+      const data = await r.json();
+      authToken = data.access_token;
+      currentUser = data;
+      return true;
+    }
+  } catch(e) { /* réseau hors ligne */ }
+  return false;
+}
+
+// ══════════════════════════════════════════════
 // HEALTH CHECK
 // ══════════════════════════════════════════════
 async function checkHealth() {
-  const data = await api('GET', '/health');
+  const data = await apiFetch('GET', '/health');
   const badge = document.getElementById('api-badge');
   if (data && data.status === 'healthy') {
     badge.textContent = '● API connectée';
@@ -563,7 +778,7 @@ async function checkHealth() {
     badge.style.color = '#6ee7b7';
     isOnline = true;
     document.getElementById('offline-banner').classList.remove('show');
-    if (offlineQueue.length > 0) autoSync();
+    if (offlineQueue.length > 0 && currentUser) autoSync();
   } else {
     badge.textContent = '⚡ Hors ligne';
     badge.style.background = '#7c2d12';
@@ -980,9 +1195,9 @@ function toast(msg, type = 'success') {
 document.getElementById('dash-date') && (document.getElementById('dash-date').textContent =
   new Date().toLocaleDateString('fr-FR', { weekday:'long', year:'numeric', month:'long', day:'numeric' }));
 
-checkHealth();
-loadDashboard();
-setInterval(checkHealth, 15000);
+// Affiche la page de login au démarrage
+showLoginScreen();
+setInterval(() => { if (currentUser) checkHealth(); }, 15000);
 
 document.getElementById('restaurant-sel').addEventListener('change', () => {
   if (document.getElementById('page-dashboard').classList.contains('active')) loadDashboard();
