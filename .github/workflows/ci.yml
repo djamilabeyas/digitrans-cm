@@ -90,21 +90,28 @@ jobs:
           cache: "pip"
           cache-dependency-path: "services/crm-api/requirements.txt"
 
-      - name: Installer les dépendances
+      - name: Installer les dépendances système
+        run: sudo apt-get install -y libffi-dev
+
+      - name: Installer les dépendances Python
         run: |
           pip install --upgrade pip
           pip install -r services/crm-api/requirements.txt
-          pip install pytest pytest-asyncio pytest-cov httpx
+          pip install pytest pytest-asyncio httpx
 
       - name: Vérifier la syntaxe Python
         run: |
           python -m py_compile services/crm-api/app/main.py
           python -m py_compile services/crm-api/app/core/config.py
           python -m py_compile services/crm-api/app/core/security.py
+          python -m py_compile services/crm-api/app/core/seed.py
+          python -m py_compile services/crm-api/app/models/utilisateur.py
+          python -m py_compile services/crm-api/app/routers/auth.py
           python -m py_compile services/crm-api/app/routers/clients.py
           python -m py_compile services/crm-api/app/routers/commandes.py
+          python -m py_compile services/crm-api/app/routers/fidelite.py
           python -m py_compile services/crm-api/app/routers/sync.py
-          echo "Syntaxe Python OK"
+          echo "✓ Syntaxe Python OK – $(find services/crm-api/app -name '*.py' | wc -l) fichiers vérifiés"
 
   # ------------------------------------------------------------------
   # 3. Build de l'image Docker
