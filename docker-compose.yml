@@ -2,8 +2,6 @@
 # DIGITRANS-CM – Stack locale de développement
 # Simuler l'environnement hybride cloud localement
 # ============================================================
-version: "3.9"
-
 services:
 
   # ------------------------------------------------------------------
