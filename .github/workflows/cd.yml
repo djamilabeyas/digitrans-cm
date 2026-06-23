@@ -1,0 +1,191 @@
+# ============================================================
+# DIGITRANS-CM – Pipeline CD
+# Déploiement sur AKS après merge sur main
+# ============================================================
+name: CD – Deploy to AKS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environnement cible"
+        required: true
+        default: "staging"
+        type: choice
+        options: [staging, prod]
+
+env:
+  REGISTRY: digitranscr.azurecr.io
+  IMAGE_NAME: crm-api
+  AKS_CLUSTER: digitrans-cm-prod-aks
+  AKS_RESOURCE_GROUP: digitrans-cm-prod-rg
+  NAMESPACE: digitrans
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1. Push image vers Azure Container Registry
+  # ------------------------------------------------------------------
+  push-image:
+    name: Push image ACR
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+        continue-on-error: true
+
+      - name: Azure Login (OIDC – sans credentials stockés)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login ACR
+        run: az acr login --name digitranscr
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,suffix=,format=short
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+
+      - name: Build & Push image
+        uses: docker/build-push-action@v5
+        with:
+          context: services/crm-api
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          provenance: true        # SBOM et attestation de provenance
+          sbom: true
+
+  # ------------------------------------------------------------------
+  # 2. Déploiement sur Staging
+  # ------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy – Staging
+    runs-on: ubuntu-latest
+    needs: push-image
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ env.AKS_RESOURCE_GROUP }}-staging \
+            --name ${{ env.AKS_CLUSTER }}-staging \
+            --overwrite-existing
+
+      - name: Deploy to Staging
+        run: |
+          # Mise à jour de l'image dans le déploiement
+          kubectl set image deployment/crm-api \
+            crm-api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.push-image.outputs.image-tag }} \
+            -n ${{ env.NAMESPACE }}-staging
+
+          # Attendre le rollout
+          kubectl rollout status deployment/crm-api \
+            -n ${{ env.NAMESPACE }}-staging \
+            --timeout=300s
+
+      - name: Tests de fumée (smoke tests)
+        run: |
+          STAGING_URL="${{ secrets.STAGING_API_URL }}"
+          echo "Test /health..."
+          curl -sf "${STAGING_URL}/health" | jq .
+
+          echo "Test /ready..."
+          curl -sf "${STAGING_URL}/ready" | jq .
+
+  # ------------------------------------------------------------------
+  # 3. Déploiement en Production (approbation manuelle requise)
+  # ------------------------------------------------------------------
+  deploy-prod:
+    name: Deploy – Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: production       # règle d'approbation configurée sur GitHub
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ env.AKS_RESOURCE_GROUP }} \
+            --name ${{ env.AKS_CLUSTER }} \
+            --overwrite-existing
+
+      - name: Blue/Green Deploy – mise à jour canary
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.push-image.outputs.image-tag }}"
+
+          # Déploiement progressif : 25% → 50% → 100%
+          kubectl set image deployment/crm-api crm-api=${IMAGE} -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/crm-api -n ${{ env.NAMESPACE }} --timeout=600s
+
+      - name: Vérification post-déploiement
+        run: |
+          PROD_URL="${{ secrets.PROD_API_URL }}"
+          for i in 1 2 3; do
+            HEALTH=$(curl -sf "${PROD_URL}/health" | jq -r '.status')
+            if [ "${HEALTH}" = "healthy" ]; then
+              echo "Vérification ${i}/3 : OK"
+            else
+              echo "Vérification ${i}/3 : ÉCHEC"
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Rollback automatique si échec
+        if: failure()
+        run: |
+          echo "Échec détecté – rollback automatique..."
+          kubectl rollout undo deployment/crm-api -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/crm-api -n ${{ env.NAMESPACE }} --timeout=300s
+          echo "Rollback effectué."
+
+      - name: Notifier le Chef de Projet
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            *DIGITRANS-CM CRM API* – Déploiement prod ${{ job.status }}
+            Image: `${{ needs.push-image.outputs.image-tag }}`
+            Commit: ${{ github.sha }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_CAMTECH }}

@@ -1,0 +1,62 @@
+# ============================================================
+# DIGITRANS-CM – .gitignore
+# ============================================================
+
+# --- Terraform ---
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# --- Variables sensibles (JAMAIS commiter) ---
+*.tfvars
+*.tfvars.json
+secrets.auto.tfvars
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.log
+
+# --- Docker ---
+.docker/
+
+# --- Kubernetes secrets (ne jamais versionner les valeurs réelles) ---
+infrastructure/kubernetes/secrets/*-values.yaml
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini

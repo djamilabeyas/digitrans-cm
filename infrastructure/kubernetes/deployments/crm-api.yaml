@@ -1,0 +1,228 @@
+# ============================================================
+# DIGITRANS-CM – Déploiement Kubernetes CRM API
+# Cluster: AKS Egypt (egyptcentral)
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crm-api
+  namespace: digitrans
+  labels:
+    app: crm-api
+    version: "1.0.0"
+    component: backend
+    tier: app
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0      # zéro downtime
+  selector:
+    matchLabels:
+      app: crm-api
+  template:
+    metadata:
+      labels:
+        app: crm-api
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: crm-api-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+
+      # Tolération pour les nodes "app"
+      tolerations:
+        - key: "role"
+          operator: "Equal"
+          value: "app"
+          effect: "NoSchedule"
+
+      nodeSelector:
+        role: app
+
+      # Anti-affinité – éviter deux pods sur le même node
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: [crm-api]
+              topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: crm-api
+          image: digitranscr.azurecr.io/crm-api:1.0.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+
+          # Variables d'environnement depuis Secrets/ConfigMaps
+          env:
+            - name: ENVIRONMENT
+              value: "prod"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: crm-db-secret
+                  key: host
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: crm-db-secret
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: crm-db-secret
+                  key: password
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: host
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: password
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: crm-jwt-secret
+                  key: private_key
+
+          # Montage du certificat TLS depuis Azure Key Vault (CSI driver)
+          volumeMounts:
+            - name: secrets-store
+              mountPath: "/mnt/secrets"
+              readOnly: true
+
+          # Ressources – dimensionné pour la charge SavoirManger (5 restaurants)
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+
+          # Probes
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 5
+
+          # Sécurité conteneur
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: digitrans-keyvault
+
+      imagePullSecrets:
+        - name: acr-secret
+
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: crm-api-sa
+  namespace: digitrans
+  annotations:
+    azure.workload.identity/client-id: "${AZURE_CLIENT_ID}"
+  labels:
+    azure.workload.identity/use: "true"
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: crm-api-hpa
+  namespace: digitrans
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: crm-api
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 3
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300   # éviter le flapping
+
+---
+# Pod Disruption Budget – garantit 2 pods disponibles pendant les maintenances
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: crm-api-pdb
+  namespace: digitrans
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: crm-api

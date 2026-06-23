@@ -1,0 +1,202 @@
+# ============================================================
+# DIGITRANS-CM – Pipeline CI
+# Déclenché sur chaque push/PR vers main et develop
+# ============================================================
+name: CI – Build & Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: digitranscr.azurecr.io
+  IMAGE_NAME: crm-api
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1. Analyse de sécurité statique (SAST)
+  # ------------------------------------------------------------------
+  sast:
+    name: SAST – Analyse sécurité
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bandit – analyse Python
+        uses: PyCQA/bandit-action@v1
+        with:
+          path: "services/crm-api"
+          level: medium
+          confidence: medium
+          exit_zero: false
+
+      - name: Semgrep – patterns sécurité
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/owasp-top-ten
+            p/python
+            p/django
+            p/jwt
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Trivy – scan dépendances Python
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "services/crm-api"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  # ------------------------------------------------------------------
+  # 2. Tests unitaires et d'intégration
+  # ------------------------------------------------------------------
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: sast
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: crm_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "services/crm-api/requirements*.txt"
+
+      - name: Installer les dépendances
+        run: |
+          pip install --upgrade pip
+          pip install -r services/crm-api/requirements.txt
+          pip install pytest pytest-asyncio pytest-cov httpx
+
+      - name: Lancer les tests
+        working-directory: services/crm-api
+        env:
+          ENVIRONMENT: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: crm_test
+          DB_USER: test_user
+          DB_PASSWORD: test_pass
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          REDIS_PASSWORD: ""
+          REDIS_SSL: "false"
+          SECRET_KEY: test-secret-key-for-ci-only
+          ALGORITHM: HS256
+        run: |
+          pytest tests/ \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=80 \
+            -v
+
+      - name: Upload couverture
+        uses: codecov/codecov-action@v4
+        with:
+          file: services/crm-api/coverage.xml
+
+  # ------------------------------------------------------------------
+  # 3. Build & Scan de l'image Docker
+  # ------------------------------------------------------------------
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (sans push)
+        uses: docker/build-push-action@v5
+        with:
+          context: services/crm-api
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/image.tar
+
+      - name: Trivy – scan image Docker
+        uses: aquasecurity/trivy-action@master
+        with:
+          input: /tmp/image.tar
+          format: "table"
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/image.tar
+          retention-days: 1
+
+  # ------------------------------------------------------------------
+  # 4. Validation Terraform (lint + plan)
+  # ------------------------------------------------------------------
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7"
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive
+        working-directory: infrastructure/terraform
+
+      - name: Checkov – sécurité IaC
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: infrastructure/terraform
+          framework: terraform
+          soft_fail: false
+          check: "CKV_AZURE_*,CKV_AWS_*"

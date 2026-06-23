@@ -1,0 +1,145 @@
+# ============================================================
+# DIGITRANS-CM – Stack locale de développement
+# Simuler l'environnement hybride cloud localement
+# ============================================================
+version: "3.9"
+
+services:
+
+  # ------------------------------------------------------------------
+  # CRM API
+  # ------------------------------------------------------------------
+  crm-api:
+    build:
+      context: ./services/crm-api
+      target: runtime
+    container_name: digitrans-crm-api
+    ports:
+      - "8000:8000"
+    environment:
+      ENVIRONMENT: dev
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: crm_db
+      DB_USER: crm_user
+      DB_PASSWORD: devpassword123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_SSL: "false"
+      SECRET_KEY: dev-secret-key-not-for-prod
+      ALGORITHM: HS256
+      CORS_ORIGINS: '["http://localhost:3000","http://localhost:8080"]'
+      ALLOWED_HOSTS: '["localhost","127.0.0.1"]'
+      RATE_LIMIT_PER_MINUTE: 1000
+      LOG_LEVEL: DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./services/crm-api/app:/app/app   # hot-reload en dev
+    networks:
+      - digitrans-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ------------------------------------------------------------------
+  # PostgreSQL
+  # ------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: digitrans-postgres
+    environment:
+      POSTGRES_DB: crm_db
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: devpassword123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=fr_CM.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - digitrans-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_user -d crm_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Redis (simulation Azure Cache for Redis)
+  # ------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: digitrans-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - digitrans-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Prometheus – métriques
+  # ------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    container_name: digitrans-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - digitrans-net
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Grafana – tableaux de bord
+  # ------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: digitrans-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - digitrans-net
+    restart: unless-stopped
+
+networks:
+  digitrans-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "172.20.0.0/16"
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
